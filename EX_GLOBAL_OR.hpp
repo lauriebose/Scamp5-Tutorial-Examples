@@ -59,13 +59,9 @@ int main()
 				AND(S3,S0,S1);
 			scamp5_kernel_end();
 
-			int point_inside_rect = 0;
-			if(scamp5_global_or(S3,0,0,255,255) > 0)
-			{
-				point_inside_rect = 1;
-			}
+			bool point_inside_rect = scamp5_global_or(S3,0,0,255,255) > 0 ? true : false;
 
-			if(point_inside_rect == 1)
+			if(point_inside_rect)
 			{
 				vs_post_text("TRUE \n");
 			   scamp5_kernel_begin();
