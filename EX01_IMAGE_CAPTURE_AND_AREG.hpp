@@ -1,5 +1,5 @@
 #include <scamp5.hpp>
-#include "MISC/OUTPUT_AREG_BITSTACK.hpp"
+#include "MISC/MISC_FUNCS.hpp"
 using namespace SCAMP5_PE;
 
 vs_stopwatch frame_timer;
@@ -73,35 +73,35 @@ int main()
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //OUTPUT IMAGES
 
-output_timer.reset();
-if(image_output)
-{
-	//display the contents of PE registers as images, displaying 3 images for A,B,C
-	if(use_4bit_image_output)
-	{
-		//output AREG quickly using 4bit approximation
-		output_4bit_image_via_DNEWS(A,display_00);
-		output_4bit_image_via_DNEWS(B,display_01);
-		output_4bit_image_via_DNEWS(C,display_02);
-	}
-	else
-	{
-		//output AREG slowly at higher accuracy
-		scamp5_output_image(A,display_00);
-		scamp5_output_image(B,display_01);
-		scamp5_output_image(C,display_02);
-	}
-}
-int output_time_microseconds = output_timer.get_usec();//get the time taken for image output
+			output_timer.reset();
+			if(image_output)
+			{
+				//display the contents of PE registers as images, displaying 3 images for A,B,C
+				if(use_4bit_image_output)
+				{
+					//output AREG quickly using 4bit approximation
+					output_4bit_image_via_DNEWS(A,display_00);
+					output_4bit_image_via_DNEWS(B,display_01);
+					output_4bit_image_via_DNEWS(C,display_02);
+				}
+				else
+				{
+					//output AREG slowly at higher accuracy
+					scamp5_output_image(A,display_00);
+					scamp5_output_image(B,display_01);
+					scamp5_output_image(C,display_02);
+				}
+			}
+			int output_time_microseconds = output_timer.get_usec();//get the time taken for image output
 
-	    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//OUTPUT TEXT INFO
 
 			int frame_time_microseconds = frame_timer.get_usec(); //get the time taken this frame
 			int max_possible_frame_rate = 1000000/frame_time_microseconds; //calculate the possible max FPS
 			int image_output_time_percentage = (output_time_microseconds*100)/frame_time_microseconds; //calculate the % of frame time which is used for image output
 			vs_post_text("frame time %d microseconds(%%%d image output), potential FPS ~%d \n",frame_time_microseconds,image_output_time_percentage,max_possible_frame_rate); //display this values on host
-    }
-    return 0;
+	}
+	return 0;
 }
 

@@ -1,5 +1,6 @@
 #include <scamp5.hpp>
-#include "MISC/OUTPUT_AREG_BITSTACK.hpp"
+
+#include "MISC/MISC_FUNCS.hpp"
 using namespace SCAMP5_PE;
 
 #include <iostream>
@@ -8,8 +9,6 @@ using namespace SCAMP5_PE;
 vs_stopwatch frame_timer;
 vs_stopwatch output_timer;
 vs_stopwatch event_readout_timer;
-
-void DREG_load_centered_rect(dreg_t dr, int centre_x, int centre_y, int width, int height);
 
 int main()
 {
@@ -122,22 +121,4 @@ int main()
 			vs_post_text("event read out time %d, frame time %d microseconds(%%%d image output), potential FPS ~%d \n",time_spent_on_event_readout,frame_time_microseconds,image_output_time_percentage,max_possible_frame_rate); //display this values on host
     }
     return 0;
-}
-
-void DREG_load_centered_rect(dreg_t dr, int centre_x, int centre_y, int width, int height)
-{
-	int top_left_row = centre_y-height/2;
-	if(top_left_row < 0)
-	{
-		height += top_left_row;
-		top_left_row = 0;
-	}
-	int top_left_column = centre_x-width/2;
-	if(top_left_column < 0)
-	{
-		width += top_left_column;
-		top_left_column = 0;
-	}
-
-	scamp5_load_rect(dr, top_left_row, top_left_column, top_left_row+height-1, top_left_column+width-1);
 }

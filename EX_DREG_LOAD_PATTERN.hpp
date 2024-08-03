@@ -4,7 +4,6 @@ using namespace SCAMP5_PE;
 vs_stopwatch frame_timer;
 vs_stopwatch output_timer;
 
-
 int main()
 {
     vs_init();

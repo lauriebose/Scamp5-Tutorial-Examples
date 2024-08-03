@@ -1,5 +1,6 @@
 #include <scamp5.hpp>
-#include "MISC/OUTPUT_AREG_BITSTACK.hpp"
+
+#include "MISC/MISC_FUNCS.hpp"
 using namespace SCAMP5_PE;
 
 vs_stopwatch frame_timer;

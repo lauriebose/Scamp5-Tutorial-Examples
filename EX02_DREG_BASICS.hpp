@@ -1,24 +1,7 @@
 #include <scamp5.hpp>
+#include "MISC/MISC_FUNCS.hpp"
 using namespace SCAMP5_PE;
 
-void DREG_load_centered_rect(dreg_t reg, int x, int y, int width, int height)
-{
-	int top_row = y-height/2;
-	if(top_row < 0)
-	{
-		height += top_row;
-		top_row = 0;
-	}
-	int right_column = x-width/2;
-	if(right_column < 0)
-	{
-		width += right_column;
-		right_column = 0;
-	}
-	int bottom_row = top_row+height;
-	int left_column = right_column+width;
-	scamp5_load_rect(reg, top_row, right_column, bottom_row, left_column);
-}
 
 vs_stopwatch frame_timer;
 vs_stopwatch output_timer;

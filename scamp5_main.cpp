@@ -25,7 +25,7 @@
 
 
 
-#define selected_algo -11
+#define selected_algo 10
 
 
 #if selected_algo == 999
