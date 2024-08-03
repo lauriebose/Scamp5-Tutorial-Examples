@@ -1,8 +1,8 @@
 #include <scamp5.hpp>
 using namespace SCAMP5_PE;
 
-#ifndef OUTPUT_AREG_BITSTACK_HPP
-#define OUTPUT_AREG_BITSTACK_HPP
+#ifndef MISC_FUNCS_HPP
+#define MISC_FUNCS_HPP
 	const int preset_in_val1 = 127;
 	const int preset_in_val2 = 74;
 	const int preset_in_val3 = 38;
@@ -118,5 +118,24 @@ using namespace SCAMP5_PE;
 			mov(F,reg);
 		scamp5_dynamic_kernel_end();
 		output_4bit_F_via_DNEWS(reg,display,use_div,in_val1,in_val2,in_val3,in_val4);
+	}
+
+	void DREG_load_centered_rect(dreg_t reg, int x, int y, int width, int height)
+	{
+		int top_row = y-height/2;
+		if(top_row < 0)
+		{
+			height += top_row;
+			top_row = 0;
+		}
+		int right_column = x-width/2;
+		if(right_column < 0)
+		{
+			width += right_column;
+			right_column = 0;
+		}
+		int bottom_row = top_row+height;
+		int left_column = right_column+width;
+		scamp5_load_rect(reg, top_row, right_column, bottom_row, left_column);
 	}
 #endif
