@@ -1,6 +1,6 @@
 #include <scamp5.hpp>
-#include "MISC/MISC_FUNCS.hpp"
 using namespace SCAMP5_PE;
+#include "MISC/MISC_FUNCS.hpp"
 
 vs_stopwatch frame_timer;
 vs_stopwatch output_timer;
@@ -8,68 +8,76 @@ vs_stopwatch output_timer;
 int main()
 {
     vs_init();
+//   	setup_voltage_configurator();//GLOBAL OR FLASHES IF THIS IS NOT HERE????!!!!
 
     const int display_size = 2;
-    vs_handle display_00 = vs_gui_add_display("S0 (box)",0,0,display_size);
+    vs_handle display_00 = vs_gui_add_display("S0 (Thresholded Image)",0,0,display_size);
     vs_handle display_01 = vs_gui_add_display("S1 (box2)",0,display_size,display_size);
     vs_handle display_10 = vs_gui_add_display("S3 = S0 AND S1",display_size,0,display_size);
-    vs_handle display_11 = vs_gui_add_display("GLOBAL OR S3",display_size,display_size,display_size);
+    vs_handle display_11 = vs_gui_add_display("GLOBAL OR S3 INDICATOR",display_size,display_size,display_size);
+
+	int threshold_value = 64;
+	vs_gui_add_slider("threshold_value",-127,127,threshold_value,&threshold_value);
 
     int box_x, box_y, box_width, box_height;
     vs_gui_add_slider("box x: ", 0, 255, 128, &box_x);
     vs_gui_add_slider("box y: ", 0, 255, 128, &box_y);
-    vs_gui_add_slider("box width: ", 0, 128, 32, &box_width);
+    vs_gui_add_slider("box width: ", 0, 128, 64, &box_width);
     vs_gui_add_slider("box height: ", 0, 128, 64, &box_height);
-
-    int point_x, point_y;
-    vs_gui_add_slider("point_x: ", 0, 255, 128, &point_x);
-    vs_gui_add_slider("point_y: ", 0, 255, 96, &point_y);
-
-    int point2_x, point2_y;
-     vs_gui_add_slider("point2_x: ", 0, 255, 72, &point2_x);
-     vs_gui_add_slider("point2_y: ", 0, 255, 55, &point2_y);
 
     while(1)
     {
     	frame_timer.reset();
 
-
-
     	vs_disable_frame_trigger();
         vs_frame_loop_control();
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-      	//LOAD CONTENT INTO DREGS S0 AND S1
+		 //CAPTURE FRAME AND PERFORM THRESHOLDING
 
-			//Load rect into S0
-			DREG_load_centered_rect(S0,box_x,box_y,box_width,box_height);
+			//load threshold value into C across all PEs
+			scamp5_in(C,threshold_value);
 
-			//Load two points into S1
-			scamp5_load_point(S5,point_y,point_x);
-			scamp5_load_point(S6,point2_y,point2_x);
 			scamp5_kernel_begin();
-				MOV(S1,S5);
-				OR(S1,S6);
+				//A = pixel data of latest frame, F = intermediate result
+				get_image(A,F);
+
+				//C = (A - C) == (latest frame pixel - threshold)
+				sub(F,A,C);
+
+				//sets FLAG = 1 in PEs where F > 0 (i.e. where A > C), else FLAG = 0
+				where(F);
+					//copy FLAG into S0
+					MOV(S0,FLAG);
+				all();
 			scamp5_kernel_end();
+
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //COMPUTE VARIOUS LOGIC OPERATIONS
+      	//LOAD RECTANGULR REGION INTO S1
+
+			DREG_load_centered_rect(S1,box_x,box_y,box_width,box_height);
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //DEMONSTRATE GLOBAL_OR
+
 			scamp5_kernel_begin();
-				AND(S3,S0,S1);
+				AND(S3,S0,S1); //S3 = the thresholded image contained inside the loaded rectangle
 			scamp5_kernel_end();
 
-			bool point_inside_rect = scamp5_global_or(S3,0,0,255,255) > 0 ? true : false;
+			int global_or_value = scamp5_global_or(S3);//check if there are any PEs in which S3 = 1
+			bool white_pixels_inside_rect  = global_or_value > 0 ? true : false;
 
-			if(point_inside_rect)
+			if(white_pixels_inside_rect )
 			{
-				vs_post_text("TRUE \n");
+			   vs_post_text("global_or : TRUE, Value : %d\n",global_or_value);
 			   scamp5_kernel_begin();
 					SET(S2);
 				scamp5_kernel_end();
 			}
 			else
 			{
-				vs_post_text("FALSE \n");
+				vs_post_text("global_or : FALSE, Value : %d\n",global_or_value);
 				scamp5_kernel_begin();
 					CLR(S2);
 				scamp5_kernel_end();
