@@ -82,7 +82,7 @@ int main()
 
 			//Draw bounding boxes' location and dimensions to the display, next to the bounding box itself
 			const std::array<uint8_t, 4> text_color = {127, 255, 127, 255};
-			std::string tmp_str = "X:" + std::to_string(bb_center_x) + " W:" + std::to_string(bb_center_y) + " Width:" +  std::to_string(bb_width) + " Height:" +  std::to_string(bb_height);
+			std::string tmp_str = "X:" + std::to_string(bb_center_x) + " Y:" + std::to_string(bb_center_y) + " Width:" +  std::to_string(bb_width) + " Height:" +  std::to_string(bb_height);
 			vs_gui_display_text(display_00, bb_left, bb_top, tmp_str.c_str(), text_color);
 
 			vs_post_text("bounding box data X:%d Y:%d W:%d H:%d\n",bb_center_x,bb_center_y,bb_width,bb_height);
