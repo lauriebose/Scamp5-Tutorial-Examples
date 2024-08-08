@@ -1,6 +1,6 @@
 #include <scamp5.hpp>
 #include "MISC/MISC_FUNCS.hpp"
-#include <random>
+#include <string>
 using namespace SCAMP5_PE;
 
 vs_stopwatch frame_timer;
@@ -13,6 +13,7 @@ int main()
     const int display_size = 3;
     vs_handle display_00 = vs_gui_add_display("S0",0,0,display_size);
 
+    //Setup sliders to control boxes used to demonstrate bounding box readout
     int box_x, box_y, box_width, box_height;
     vs_gui_add_slider("box x: ", 0, 255, 128, &box_x);
     vs_gui_add_slider("box y: ", 0, 255, 128, &box_y);
@@ -38,33 +39,51 @@ int main()
     	vs_disable_frame_trigger();
         vs_frame_loop_control();
 
+    	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    	//LOAD CONTENT INTO A DIGITAL REGISTER PLANE S0 FOR DEMONSTRATING BOUNDING BOX OUTPUT
 
-        //load box & box2 into DREGs
-        DREG_load_centered_rect(S4,box_x,box_y,box_width,box_height);
-        DREG_load_centered_rect(S5,box2_x,box2_y,box2_width,box2_height);
-        DREG_load_centered_rect(S6,box3_x,box3_y,box3_width,box3_height);
-    	scamp5_kernel_begin();
-			MOV(S0,S4);
-			OR(S0,S5);
-			OR(S0,S6);
-		scamp5_kernel_end();
+			//Load boxes into DREG planes
+			DREG_load_centered_rect(S4,box_x,box_y,box_width,box_height);
+			DREG_load_centered_rect(S5,box2_x,box2_y,box2_width,box2_height);
+			DREG_load_centered_rect(S6,box3_x,box3_y,box3_width,box3_height);
 
+			//Combine boxes into single DREG plane
+			scamp5_kernel_begin();
+				MOV(S0,S4);
+				OR(S0,S5);
+				OR(S0,S6);
+			scamp5_kernel_end();
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//GET BOUNDING BOX OF S0's CONTENT
 
 			uint8_t bb_data [4];
-			scamp5_output_boundingbox(S0,display_00,bb_data);
+			//This function get bounding box of digital register plane's (S0's) content
+			//That is the bounding box of the 1s/white pixels present in S0
+			//Will fill the passed array "bb_data" with the bounding boxes' top-left and bottom-right coordinates
+			scamp5_scan_boundingbox(S0,bb_data);
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//DISPLAY THE RETRIEVED BOUNDING BOX
+
+			//Will draw a bounding box to a display based on an array of coordinates, here the coordinates we just retrieved
+			scamp5_display_boundingbox(display_00,bb_data,1);
 
 			int bb_top = bb_data[0];
 			int bb_bottom = bb_data[2];
-			int bb_left = bb_data[1];
-			int bb_right = bb_data[3];
+			int bb_right = bb_data[1];
+			int bb_left = bb_data[3];
 
-			int bb_width = bb_right-bb_left;
+			//Calculate the center and dimensions of the bounding box
+			int bb_width = bb_left-bb_right;
 			int bb_height = bb_bottom-bb_top;
-			int bb_center_x = (bb_left+bb_right)/2;
+			int bb_center_x = (bb_right+bb_left)/2;
 			int bb_center_y = (bb_top+bb_bottom)/2;
+
+			//Draw bounding boxes' location and dimensions to the display, next to the bounding box itself
+			const std::array<uint8_t, 4> text_color = {127, 255, 127, 255};
+			std::string tmp_str = "X:" + std::to_string(bb_center_x) + " W:" + std::to_string(bb_center_y) + " Width:" +  std::to_string(bb_width) + " Height:" +  std::to_string(bb_height);
+			vs_gui_display_text(display_00, bb_left, bb_top, tmp_str.c_str(), text_color);
 
 			vs_post_text("bounding box data X:%d Y:%d W:%d H:%d\n",bb_center_x,bb_center_y,bb_width,bb_height);
 
@@ -87,4 +106,3 @@ int main()
 
     return 0;
 }
-
