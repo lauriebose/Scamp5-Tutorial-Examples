@@ -11,6 +11,8 @@
 #define EX_DREG_BOUNDING_BOX -10
 #define EX_DREG_FLOODING -11
 
+#define EX_INTERLEAVED_DATA -15
+
 #define EX_IMAGE_CAPTURE 0
 #define EX_IMAGE_CAPTURE_AND_AREG 1
 #define	EX_DREG_BASICS 2
@@ -23,9 +25,7 @@
 #define EX_DREG_EXPAND_AND_ERODE 9
 #define EX_HALF_SCALING 10
 
-
-
-#define selected_algo 10
+#define selected_algo -15
 
 
 #if selected_algo == 999
@@ -51,7 +51,8 @@
 	#include "EX09_DREG_EXPAND_AND_ERODE.hpp"
 #elif selected_algo == EX_HALF_SCALING
 	#include "EX10_HALF_SCALING.hpp"
-
+#elif selected_algo == EX_INTERLEAVED_DATA
+	#include "EX_INTERLEAVED_DATA.hpp"
 
 
 #elif selected_algo == EX_EVENT_READOUT
@@ -76,5 +77,7 @@
 	#include "EX_SHAPE_EXTRACTION.hpp"
 #elif selected_algo == EX_DREG_BOUNDING_BOX
 	#include "EX_DREG_BOUNDING_BOX.hpp"
+
+
 #endif
 
