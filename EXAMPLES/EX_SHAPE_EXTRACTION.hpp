@@ -15,36 +15,43 @@ int main()
     vs_handle display_01 = vs_gui_add_display("S1 Flooding Source",0,display_size,display_size);
     vs_handle display_02 = vs_gui_add_display("S2 = S1 flooding, masked by S0",0,display_size*2,display_size);
 
-    //The point from which flooding will start from
-    int flood_source_x, flood_source_y;
-	vs_gui_add_slider("flood_source_x: ",1,256,128,&flood_source_x);
-	vs_gui_add_slider("flood_source_y: ",1,256,128,&flood_source_y);
-
-	//The number of iterations performed, determines the extent/distance flooding can reach
-    int flood_iterations = 10;
-    vs_gui_add_slider("flood_iterations", 0,20,flood_iterations,&flood_iterations);
-
 	bool generate_boxes = true;
-	vs_handle gui_button_generate_boxes = vs_gui_add_button("generate_boxes");
-	//function that will be called whenever button is pressed
-	vs_on_gui_update(gui_button_generate_boxes,[&](int32_t new_value)
+	vs_handle gui_button_generate_boxes = vs_gui_add_button("generate boxes");
+	vs_on_gui_update(gui_button_generate_boxes,[&](int32_t new_value)//function that will be called whenever button is pressed
 	{
 		generate_boxes = true;//trigger generation of boxes
     });
 
-	int output_bounding_box = 1;
-	vs_gui_add_switch("output_bounding_box", true, &output_bounding_box);
+	bool extract_a_shape_trigger = false;
+	vs_handle gui_button_extract_shape = vs_gui_add_button("extract a shape");
+	vs_on_gui_update(gui_button_extract_shape,[&](int32_t new_value)//function that will be called whenever button is pressed
+	{
+		extract_a_shape_trigger = true;
+    });
 
-	//Toggle if to refresh the content of S0 each frame to prevent it decaying
-    int refresh_S0 = 1;
-    vs_gui_add_switch("refresh_S0", true, &refresh_S0);
+	bool eliminate_shape_trigger = false;
+	vs_handle gui_button_eliminate_shape = vs_gui_add_button("eliminate extracted shape");
+	vs_on_gui_update(gui_button_eliminate_shape,[&](int32_t new_value)//function that will be called whenever button is pressed
+	{
+		eliminate_shape_trigger = true;
+    });
 
-    //Objects for random number generation
-		std::random_device rd;
-		std::mt19937 gen(rd()); // Mersenne Twister generator
-		int min = 0;
-		int max = 255;
-		std::uniform_int_distribution<> distr(min, max);//Create distribution to sample from
+	vs_handle gui_button_extract_and_eliminate_shape = vs_gui_add_button("extract+eliminate a shape");
+	vs_on_gui_update(gui_button_extract_and_eliminate_shape,[&](int32_t new_value)//function that will be called whenever button is pressed
+	{
+		extract_a_shape_trigger = true;
+		eliminate_shape_trigger = true;
+    });
+
+	//Setup objects for random number generation
+	//This code looks like nonsense as the std classes here overload the function call operator...
+	std::random_device rd;//A true random number
+	std::mt19937 gen(rd()); // Mersenne Twister pseudo random number generator, seeded with a true random number
+	int random_min_value = 0;
+	int random_max_value = 255;
+	//Create distribution object that can be used to map a given random value to a value of the distribution
+	std::uniform_int_distribution<> distr(random_min_value, random_max_value);
+
 
     while(1)
     {
@@ -58,10 +65,33 @@ int main()
 
 			if(generate_boxes)
 			{
+				const int boxes_to_add = 50;
+				const int boxes_to_subtract = 25;
+
+				//Generate a set of random rectangles across DREG plane S0
+				{
+					scamp5_kernel_begin();
+						CLR(S0); //Clear content of S0
+					scamp5_kernel_end();
+					for(int n = 0 ; n < boxes_to_add ; n++)
+					{
+						//Load box of random location and dimensions into S5
+						int pos_x = distr(gen);
+						int pos_y = distr(gen);
+						int width = 1+distr(gen)/5;
+						int height = 1+distr(gen)/5;
+						DREG_load_centered_rect(S5,pos_x,pos_y,width,height);
+						scamp5_kernel_begin();
+							OR(S0,S5);//Add box in S5 to content of S0
+						scamp5_kernel_end();
+					}
+				}
+
+				//Generate another set of random rectangles across DREG plane S1
 				scamp5_kernel_begin();
-					CLR(S0); //Clear content of S0
+					CLR(S6); //Clear content of S1
 				scamp5_kernel_end();
-				for(int n = 0 ; n < 50 ; n++)
+				for(int n = 0 ; n < boxes_to_subtract ; n++)
 				{
 					//Load box of random location and dimensions into S5
 					int pos_x = distr(gen);
@@ -69,85 +99,105 @@ int main()
 					int width = 1+distr(gen)/5;
 					int height = 1+distr(gen)/5;
 					DREG_load_centered_rect(S5,pos_x,pos_y,width,height);
-
 					scamp5_kernel_begin();
-						OR(S0,S5);//Add box in S5 to content of S0
+						OR(S6,S5);//Add box in S5 to content of S0
 					scamp5_kernel_end();
 				}
 
-
+				//Subtract the rectangles in S6 from those of S2
 				scamp5_kernel_begin();
-					CLR(S1); //Clear content of S0
-				scamp5_kernel_end();
-				for(int n = 0 ; n < 25 ; n++)
-				{
-					//Load box of random location and dimensions into S5
-					int pos_x = distr(gen);
-					int pos_y = distr(gen);
-					int width = 1+distr(gen)/5;
-					int height = 1+distr(gen)/5;
-					DREG_load_centered_rect(S5,pos_x,pos_y,width,height);
-
-					scamp5_kernel_begin();
-						OR(S1,S5);//Add box in S5 to content of S0
-					scamp5_kernel_end();
-				}
-
-				scamp5_kernel_begin();
-					NOT(S5,S1);
-					AND(S0,S5,S0);
+					NOT(S5,S6);//S5 = Inverted content of S6
+					AND(S0,S5,S0);//perform AND to "Subtract" S1 rectangles from S0
 				scamp5_kernel_end();
 
 				generate_boxes = false;
 			}
 
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //PERFORM FLOODING OF S0, ORGINATING FROM A SPECIFIC POINT
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//PERFORM FLOODING OF S0, ORGINATING FROM A SPECIFIC POINT
 
-			//Load specified point into S1
-			scamp5_load_point(S1,flood_source_y,flood_source_x);
-			//Perform Flooding using native instructions
+			if(extract_a_shape_trigger)
 			{
-				scamp5_kernel_begin();
-					SET (RN,RS,RE,RW);//Set all DNEWS register so flooding is performed in all directions across whole processor array
-					MOV(S2,S1);
-				scamp5_kernel_end();
+				extract_a_shape_trigger = false;//Reset Trigger
 
-				//Perform flooding iterations
-				scamp5_flood(S2,S0,0,flood_iterations);
+				uint8_t event_data_array [2];
+				//Scan Events from S5 register plane
+				//Examines the S5 register of each PE, returning the locations of PEs in which S5 == 1
+				//The locations of these PEs will be written to the array "event_data_array" as (x,y) coordinate pairs
+				//Once all events have been scanned will write "(0,0)" coordinates into the array
+				scamp5_scan_events(S0,event_data_array,1);
+
+				int event_xpos = event_data_array[0];
+				int event_ypos = event_data_array[1];
+				scamp5_load_point(S1,event_ypos,event_xpos);
+
+				//Perform Flooding using native instructions
+				{
+					scamp5_kernel_begin();
+						SET (RN,RS,RE,RW);//Set all DNEWS register so flooding is performed in all directions across whole processor array
+
+						SET(RF);//Reset digital Flag = 1 across whole processor array, as operations targeting RZ are Flagged by RF
+						MOV(RP,S1);//Copy loaded point into RZ
+						MOV(RF,S0);//Copy the content of S0 into RF to act as the Mask during flooding
+					scamp5_kernel_end();
+
+					//Perform flooding iterations
+					int flood_iterations = 10;
+					for(int n = 0 ; n < flood_iterations ; n++)
+					{
+						scamp5_kernel_begin();
+							PROP0();
+						scamp5_kernel_end();
+					}
+
+					scamp5_kernel_begin();
+						MOV(S2,RP);//Copy result of flooding S2
+					scamp5_kernel_end();
+				}
 			}
-
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		//OPTIONALLY OUTPUT THE BOUNDING BOX OF THE FLOODED SHAPE
+		//PERFORM FLOODING OF S0, ORGINATING FROM A SPECIFIC POINT
 
-			if(output_bounding_box)
+			if(eliminate_shape_trigger)
 			{
-			    uint8_t bb_data [4];
-				scamp5_output_boundingbox(S2,display_02,bb_data);
-
-				int bb_top = bb_data[0];
-				int bb_bottom = bb_data[2];
-				int bb_left = bb_data[1];
-				int bb_right = bb_data[3];
-
-				int bb_width = bb_right-bb_left;
-				int bb_height = bb_bottom-bb_top;
-				int bb_center_x = (bb_left+bb_right)/2;
-				int bb_center_y = (bb_top+bb_bottom)/2;
-
-				vs_post_text("bounding box data X:%d Y:%d W:%d H:%d\n",bb_center_x,bb_center_y,bb_width,bb_height);
-			}
-
-	    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		//OPTIONALLY REFRESH CONTENT OF S0 TO PREVENT IT DECAYING
-
-			if(refresh_S0)
-			{
+				eliminate_shape_trigger = false;
 				scamp5_kernel_begin();
-					REFRESH(S0);
+					NOT(S6,S2);//Invert DREG plane holding extracted shape and store in S6
+					AND(S0,S0,S6);//Eliminate extracted shape from S0 by performing AND operation with S6
 				scamp5_kernel_end();
 			}
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//OUTPUT THE BOUNDING BOX OF THE FLOODED SHAPE
+
+
+			uint8_t bb_data [4];
+			scamp5_output_boundingbox(S2,display_00,bb_data);
+			scamp5_display_boundingbox(display_01,bb_data,1);
+			scamp5_display_boundingbox(display_02,bb_data,1);
+
+			int bb_top = bb_data[0];
+			int bb_bottom = bb_data[2];
+			int bb_left = bb_data[1];
+			int bb_right = bb_data[3];
+
+			int bb_width = bb_right-bb_left;
+			int bb_height = bb_bottom-bb_top;
+			int bb_center_x = (bb_left+bb_right)/2;
+			int bb_center_y = (bb_top+bb_bottom)/2;
+
+			vs_post_text("bounding box data X:%d Y:%d W:%d H:%d\n",bb_center_x,bb_center_y,bb_width,bb_height);
+
+
+	    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//REFRESH CONTENT OF S0,S1,S2 TO PREVENT IT DECAYING
+			scamp5_kernel_begin();
+				REFRESH(S0);
+				REFRESH(S1);
+				REFRESH(S2);
+			scamp5_kernel_end();
+
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //OUTPUT IMAGES
@@ -170,3 +220,4 @@ int main()
 
     return 0;
 }
+
