@@ -108,14 +108,27 @@ int main()
 				scamp5_kernel_end();
 			}
 
-
-			//Repeatedly perform DNEWS operations on S0 for the selected number of iterations
-			for(int n = 0 ; n < DNEWS_iterations ; n++)
+			if(!use_DNEWS1)
 			{
-				scamp5_kernel_begin();
-					DNEWS0(S6,S0);//S6 = DNEWS(S0)
-					MOV(S0,S6);//Copy the results in S6 back into S0
-				scamp5_kernel_end();
+				//Repeatedly perform DNEWS0 operations on S0 for the selected number of iterations
+				for(int n = 0 ; n < DNEWS_iterations ; n++)
+				{
+					scamp5_kernel_begin();
+						DNEWS0(S6,S0);//S6 = DNEWS(S0)
+						MOV(S0,S6);//Copy the results in S6 back into S0
+					scamp5_kernel_end();
+				}
+			}
+			else
+			{
+				//Repeatedly perform DNEWS1 operations on S0 for the selected number of iterations
+				for(int n = 0 ; n < DNEWS_iterations ; n++)
+				{
+					scamp5_kernel_begin();
+						DNEWS1(S6,S0);//S6 = DNEWS(S0)
+						MOV(S0,S6);//Copy the results in S6 back into S0
+					scamp5_kernel_end();
+				}
 			}
 
 
