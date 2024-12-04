@@ -1,11 +1,10 @@
 #include <scamp5.hpp>
-
 #include "MISC/MISC_FUNCS.hpp"
 using namespace SCAMP5_PE;
 
 vs_stopwatch frame_timer;
 vs_stopwatch output_timer;
-vs_stopwatch areg_shift_timer;
+vs_stopwatch kernel_test_timer;
 
 int main()
 {
@@ -21,8 +20,14 @@ int main()
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //SETUP GUI ELEMENTS & CONTROLLABLE VARIABLES
 
-	    int kernel_selection = 0;
-	    vs_gui_add_slider("kernel_selection",0,8,kernel_selection,&kernel_selection);
+	    int kernel_test_selection = 0;
+	    vs_gui_add_slider("kernel selection",0,8,kernel_test_selection,&kernel_test_selection);
+
+	    int binary_image_threshold = 0;
+	    vs_gui_add_slider("binary image threshold",-127,127,binary_image_threshold,&binary_image_threshold);
+
+	    int digital_kernels = 0;
+	    vs_gui_add_switch("test digital kernels", digital_kernels == 1, &digital_kernels);
 
     //CONTINOUS FRAME LOOP
     while(true)
@@ -36,197 +41,363 @@ int main()
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //GENERATE DATA IN DREG S0 TO DEMONSTRATE DNEWS OPERATION UPON
 
-			//generate 4 boxes and 1 point in various DREG
-			scamp5_load_point(S6,96,96);
-			DREG_load_centered_rect(S5,188,118,32,32);
-			DREG_load_centered_rect(S4,48,128,32,32);
-			DREG_load_centered_rect(S3,10,125,10,200);
-			DREG_load_centered_rect(S2,125,180,180,20);
+        scamp5_in(E,binary_image_threshold);
+		scamp5_kernel_begin();
+			get_image(A, F);	//get new frame
+			mov(B,A);
 
-			//combine S6,S5,S4 contents together in S0
-			scamp5_kernel_begin();
-				MOV(S0,S6);
-				OR(S0,S5);
-				OR(S0,S4);
-				OR(S0,S3);
-				OR(S0,S2);
-			scamp5_kernel_end();
-
-			scamp5_kernel_begin();
+			sub(F,A,E);
+			where(F);
+				MOV(S0,FLAG);
 				MOV(S1,S0);
-			scamp5_kernel_end();
+			all();
+		scamp5_kernel_end();
 
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		//shift content of S1 using DNEWS
+		//TEST THE EXECUTION TIME TO PERFORM THE SAME TASK (SHIFTING DATA 100 PIXELS), USING KERNELS OF VARIOUS LENGTHS
 
 			int time_spent_shifting = -1;
 
-			scamp5_kernel_begin();
-				CLR(RN,RS,RE,RW);//Clear all DREG controlling DNEWS behaviour
-				SET(RW);
-			scamp5_kernel_end();
-
-			if(kernel_selection == 0)
+			 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			//Test using kernels containing only digital instructions
+			if(digital_kernels == 1)
 			{
-				vs_post_text("perform 100 kernels of length 2\n");
-				areg_shift_timer.reset();
-				for(int n = 0 ; n < 100 ; n++)
-				{
-					scamp5_kernel_begin();
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-					scamp5_kernel_end();
-				}
-				time_spent_shifting = areg_shift_timer.get_usec();
-			}
-
-			if(kernel_selection == 1)
-			{
-				vs_post_text("perform 50 kernels of length 4\n");
-				areg_shift_timer.reset();
-				for(int n = 0 ; n < 50 ; n++)
-				{
-					scamp5_kernel_begin();
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-					scamp5_kernel_end();
-				}
-				time_spent_shifting = areg_shift_timer.get_usec();
-			}
-
-			if(kernel_selection == 2)
-			{
-				vs_post_text("perform 25 kernels of length 8\n");
-				areg_shift_timer.reset();
-				for(int n = 0 ; n < 25 ; n++)
-				{
-					scamp5_kernel_begin();
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-					scamp5_kernel_end();
-				}
-				time_spent_shifting = areg_shift_timer.get_usec();
-			}
-
-			if(kernel_selection == 3)
-			{
-				vs_post_text("perform 20 kernels of length 10\n");
-				areg_shift_timer.reset();
-				for(int n = 0 ; n < 20 ; n++)
-				{
-					scamp5_kernel_begin();
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-					scamp5_kernel_end();
-				}
-				time_spent_shifting = areg_shift_timer.get_usec();
-			}
-
-
-			if(kernel_selection == 4)
-			{
-				vs_post_text("perform 10 kernels of length 20\n");
-				areg_shift_timer.reset();
-				for(int n = 0 ; n < 10 ; n++)
-				{
-					scamp5_kernel_begin();
-						//this loop is constant and never changes behaviour, and thus it is "safe" to put it inside of the kernel block
-						//really this is just to avoid writing out the two instructions in the loop 10 times.... -_-
-						for(int i = 0; i < 10 ; i++)
-						{
-							DNEWS1(S6,S1);
-							MOV(S1,S6);
-						}
-					scamp5_kernel_end();
-				}
-				time_spent_shifting = areg_shift_timer.get_usec();
-			}
-
-			if(kernel_selection == 5)
-			{
-				vs_post_text("perform 5 kernels of length 40\n");
-				areg_shift_timer.reset();
-				for(int n = 0 ; n < 5 ; n++)
-				{
-					scamp5_kernel_begin();
-						//loop to avoid writing this out 20 times... -__-
-						for(int i = 0; i < 20 ; i++)
-						{
-							DNEWS1(S6,S1);
-							MOV(S1,S6);
-						}
-					scamp5_kernel_end();
-				}
-				time_spent_shifting = areg_shift_timer.get_usec();
-			}
-
-			if(kernel_selection == 6)
-			{
-				vs_post_text("perform 4 kernels of length 50\n");
-				areg_shift_timer.reset();
-				for(int n = 0 ; n < 4 ; n++)
-				{
-					scamp5_kernel_begin();
-						//loop to avoid writing this out 25 times... -__-
-						for(int i = 0; i < 25 ; i++)
-						{
-							DNEWS1(S6,S1);
-							MOV(S1,S6);
-						}
-					scamp5_kernel_end();
-				}
-				time_spent_shifting = areg_shift_timer.get_usec();
-			}
-
-
-			if(kernel_selection == 7)
-			{
-				vs_post_text("perform 2 kernels of length 100\n");
-				areg_shift_timer.reset();
-				for(int n = 0 ; n < 2 ; n++)
-				{
-					scamp5_kernel_begin();
-						//loop to avoid writing this out 50 times... -___-
-						for(int i = 0; i < 50 ; i++)
-						{
-							DNEWS1(S6,S1);
-							MOV(S1,S6);
-						}
-					scamp5_kernel_end();
-				}
-				time_spent_shifting = areg_shift_timer.get_usec();
-			}
-
-			if(kernel_selection == 8)
-			{
-				vs_post_text("perform 1 kernel of length 200\n");
-				areg_shift_timer.reset();
 				scamp5_kernel_begin();
-					//loop to avoid writing this out 100 times!
-					for(int i = 0; i < 100 ; i++)
-					{
-						DNEWS1(S6,S1);
-						MOV(S1,S6);
-					}
+					CLR(RN,RS,RE,RW);//Clear all DREG controlling DNEWS behaviour
+					SET(RW);
 				scamp5_kernel_end();
-				time_spent_shifting = areg_shift_timer.get_usec();
+
+				if(kernel_test_selection == 0)
+				{
+					vs_post_text("Shift 100 pixels by performing 100 kernels of length 2\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 100 ; n++)
+					{
+						scamp5_kernel_begin();
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 1)
+				{
+					vs_post_text("Shift 100 pixels by performing 50 kernels of length 4\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 50 ; n++)
+					{
+						scamp5_kernel_begin();
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 2)
+				{
+					vs_post_text("Shift 100 pixels by performing 25 kernels of length 8\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 25 ; n++)
+					{
+						scamp5_kernel_begin();
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 3)
+				{
+					vs_post_text("Shift 100 pixels by performing 20 kernels of length 10\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 20 ; n++)
+					{
+						scamp5_kernel_begin();
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+
+				if(kernel_test_selection == 4)
+				{
+					vs_post_text("Shift 100 pixels by performing 10 kernels of length 20\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 10 ; n++)
+					{
+						scamp5_kernel_begin();
+							//this loop is constant and never changes behaviour, and thus it is "safe" to put it inside of the kernel block
+							//really this is just to avoid writing out the two instructions in the loop 10 times.... -_-
+							for(int i = 0; i < 10 ; i++)
+							{
+								DNEWS1(S6,S1);
+								MOV(S1,S6);
+							}
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 5)
+				{
+					vs_post_text("Shift 100 pixels by performing 5 kernels of length 40\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 5 ; n++)
+					{
+						scamp5_kernel_begin();
+							//loop to avoid writing this out 20 times... -__-
+							for(int i = 0; i < 20 ; i++)
+							{
+								DNEWS1(S6,S1);
+								MOV(S1,S6);
+							}
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 6)
+				{
+					vs_post_text("Shift 100 pixels by performing 4 kernels of length 50\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 4 ; n++)
+					{
+						scamp5_kernel_begin();
+							//loop to avoid writing this out 25 times... -__-
+							for(int i = 0; i < 25 ; i++)
+							{
+								DNEWS1(S6,S1);
+								MOV(S1,S6);
+							}
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+
+				if(kernel_test_selection == 7)
+				{
+					vs_post_text("Shift 100 pixels by performing 2 kernels of length 100\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 2 ; n++)
+					{
+						scamp5_kernel_begin();
+							//loop to avoid writing this out 50 times... -___-
+							for(int i = 0; i < 50 ; i++)
+							{
+								DNEWS1(S6,S1);
+								MOV(S1,S6);
+							}
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 8)
+				{
+					vs_post_text("Shift 100 pixels by performing 1 kernel of length 200\n");
+					kernel_test_timer.reset();
+					scamp5_kernel_begin();
+						//loop to avoid writing this out 100 times!
+						for(int i = 0; i < 100 ; i++)
+						{
+							DNEWS1(S6,S1);
+							MOV(S1,S6);
+						}
+					scamp5_kernel_end();
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+			}
+
+
+		   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			//Test using kernels containing only analogue instructions
+			if(digital_kernels == 0)
+			{
+
+				if(kernel_test_selection == 0)
+				{
+					vs_post_text("Shift 100 pixels by performing 100 kernels of length 2\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 100 ; n++)
+					{
+						scamp5_kernel_begin();
+							bus(NEWS,B);
+							bus(B,XW);
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 1)
+				{
+					vs_post_text("Shift 100 pixels by performing 50 kernels of length 4\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 50 ; n++)
+					{
+						scamp5_kernel_begin();
+							bus(NEWS,B);
+							bus(B,XW);
+							bus(NEWS,B);
+							bus(B,XW);
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 2)
+				{
+					vs_post_text("Shift 100 pixels by performing 25 kernels of length 8\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 25 ; n++)
+					{
+						scamp5_kernel_begin();
+							bus(NEWS,B);
+							bus(B,XW);
+							bus(NEWS,B);
+							bus(B,XW);
+							bus(NEWS,B);
+							bus(B,XW);
+							bus(NEWS,B);
+							bus(B,XW);
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 3)
+				{
+					vs_post_text("Shift 100 pixels by performing 20 kernels of length 10\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 20 ; n++)
+					{
+						scamp5_kernel_begin();
+							bus(NEWS,B);
+							bus(B,XW);
+							bus(NEWS,B);
+							bus(B,XW);
+							bus(NEWS,B);
+							bus(B,XW);
+							bus(NEWS,B);
+							bus(B,XW);
+							bus(NEWS,B);
+							bus(B,XW);
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+
+				if(kernel_test_selection == 4)
+				{
+					vs_post_text("Shift 100 pixels by performing 10 kernels of length 20\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 10 ; n++)
+					{
+						scamp5_kernel_begin();
+							//this loop is constant and never changes behaviour, and thus it is "safe" to put it inside of the kernel block
+							//really this is just to avoid writing out the two instructions in the loop 10 times.... -_-
+							for(int i = 0; i < 10 ; i++)
+							{
+								bus(NEWS,B);
+								bus(B,XW);
+							}
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 5)
+				{
+					vs_post_text("Shift 100 pixels by performing 5 kernels of length 40\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 5 ; n++)
+					{
+						scamp5_kernel_begin();
+							//loop to avoid writing this out 20 times... -__-
+							for(int i = 0; i < 20 ; i++)
+							{
+								bus(NEWS,B);
+								bus(B,XW);
+							}
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 6)
+				{
+					vs_post_text("Shift 100 pixels by performing 4 kernels of length 50\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 4 ; n++)
+					{
+						scamp5_kernel_begin();
+							//loop to avoid writing this out 25 times... -__-
+							for(int i = 0; i < 25 ; i++)
+							{
+								bus(NEWS,B);
+								bus(B,XW);
+							}
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+
+				if(kernel_test_selection == 7)
+				{
+					vs_post_text("Shift 100 pixels by performing 2 kernels of length 100\n");
+					kernel_test_timer.reset();
+					for(int n = 0 ; n < 2 ; n++)
+					{
+						scamp5_kernel_begin();
+							//loop to avoid writing this out 50 times... -___-
+							for(int i = 0; i < 50 ; i++)
+							{
+								bus(NEWS,B);
+								bus(B,XW);
+							}
+						scamp5_kernel_end();
+					}
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
+
+				if(kernel_test_selection == 8)
+				{
+					vs_post_text("Shift 100 pixels by performing 1 kernel of length 200\n");
+					kernel_test_timer.reset();
+					scamp5_kernel_begin();
+						//loop to avoid writing this out 100 times!
+						for(int i = 0; i < 100 ; i++)
+						{
+							bus(NEWS,B);
+							bus(B,XW);
+						}
+					scamp5_kernel_end();
+					time_spent_shifting = kernel_test_timer.get_usec();
+				}
 			}
 
 			vs_post_text("time spent shifting %d \n",time_spent_shifting);
@@ -235,8 +406,17 @@ int main()
 		//OUTPUT IMAGES
 
 			output_timer.reset();
-			scamp5_output_image(S0,display_00);//display thresholded image
-			scamp5_output_image(S1,display_01);//displayed shifted thresholded image
+			if(digital_kernels)
+			{
+				scamp5_output_image(S0,display_00);//display thresholded image
+				scamp5_output_image(S1,display_01);//displayed shifted thresholded image
+			}
+			else
+			{
+				scamp5_output_image(A,display_00);//display image
+				scamp5_output_image(B,display_01);//displayed shifted image
+			}
+
 			int output_time_microseconds = output_timer.get_usec();//get the time taken for image output
 
 	    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -250,4 +430,6 @@ int main()
     }
     return 0;
 }
+
+
 
