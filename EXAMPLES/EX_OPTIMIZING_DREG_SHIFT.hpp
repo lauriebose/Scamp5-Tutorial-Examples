@@ -19,10 +19,10 @@ int main()
     int display_size = 1;
     auto display_00 = vs_gui_add_display("scamp_shift()",0,0,display_size);
     auto display_01 = vs_gui_add_display("simple_shift",0,display_size,display_size);
-    auto display_02 = vs_gui_add_display("batched_shift_no_decay",display_size,0,display_size);
-    auto display_03 = vs_gui_add_display("batched_shift",display_size,display_size,display_size);
-    auto display_04 = vs_gui_add_display("White:scamp_shift(),  Green:Simple,  Red:Batched(no decay),  Yellow:Batched",0,display_size*2,display_size*2,style_plot);
-    vs_gui_set_scope(display_04,0,80,256);
+    auto display_10 = vs_gui_add_display("batched_shift_no_decay",display_size,0,display_size);
+    auto display_11 = vs_gui_add_display("batched_shift",display_size,display_size,display_size);
+    auto display_plot = vs_gui_add_display("White:scamp_shift(),  Green:Simple,  Red:Batched(no decay),  Yellow:Batched",0,display_size*2,display_size*2,style_plot);
+    vs_gui_set_scope(display_plot,0,80,256);
     int threshold = 0;
     vs_gui_add_slider("threshold",-127,127,threshold,&threshold);
 
@@ -106,15 +106,15 @@ int main()
   		plot_data[1] = batched_no_decay_shift_time;
   		plot_data[2] = simple_shift_time;
   		plot_data[3] = library_shift_time;
-		vs_post_set_channel(display_04);
+		vs_post_set_channel(display_plot);
 		vs_post_int32(plot_data,1,4);
 
         vs_post_text("Execution Times : Batched Shift %d, Batched Shift no decay %d, Simple Shift %d, scamp_shift() %d \n",batched_shift_time,batched_no_decay_shift_time, simple_shift_time, library_shift_time);
 
 		scamp5_output_image(S1,display_00);
 		scamp5_output_image(S2,display_01);
-		scamp5_output_image(S3,display_02);
-		scamp5_output_image(S4,display_03);
+		scamp5_output_image(S3,display_10);
+		scamp5_output_image(S4,display_11);
     }
 
     return 0;
