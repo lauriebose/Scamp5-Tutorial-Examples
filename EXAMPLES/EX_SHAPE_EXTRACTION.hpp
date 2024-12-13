@@ -53,6 +53,10 @@ int main()
 	std::uniform_int_distribution<> distr(random_min_value, random_max_value);
 
 
+	scamp5_kernel_begin();
+		CLR(S0,S1,S2);
+	scamp5_kernel_end();
+
     while(1)
     {
     	frame_timer.reset();
