@@ -10,13 +10,9 @@ vs_stopwatch sum_timer;
 
 const int record_length = 100;
 
-// Returns (mean, variance) of the data (two-pass approach for clarity).
-// By default, we'll compute the *sample* variance, which is common in statistics.
-// You can switch to population variance easily (see the comment below).
+
 std::pair<int, int> computeMeanAndVariance(const std::vector<uint16_t>& data)
 {
-
-    // 1) Compute the mean
     int sum = 0;
     for (uint8_t value : data)
     {
@@ -31,11 +27,7 @@ std::pair<int, int> computeMeanAndVariance(const std::vector<uint16_t>& data)
         sqDiffSum += diff * diff;
     }
 
-    // For sample variance: divide by (n - 1)
-    // For population variance: divide by n
     int variance = sqDiffSum / (data.size() - 1);
-    // If computing population variance, use:
-    // double variance = sqDiffSum / data.size();
 
     return {mean, variance};
 }
