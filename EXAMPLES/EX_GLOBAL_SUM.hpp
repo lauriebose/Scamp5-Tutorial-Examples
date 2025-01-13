@@ -99,16 +99,26 @@ int main()
         vs_frame_loop_control();
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		//capture new image into AREG A and create copy in B
+		//Capture / Create the analogue image to test globabl summation upon
 
-			if(use_test_input)
+			if(!use_test_input)
+			{
+				//Capture an Image
+				scamp5_kernel_begin();
+					get_image(A,E);
+					mov(B,A);
+				scamp5_kernel_end();
+			}
+			else
 			{
 				if(!use_binary_test_input)
 				{
+					//Create an image with all pixels of a specific value
 					scamp5_in(A,input_value);
 				}
 				else
 				{
+					//Create an image with a certain proportion of pixels the maximum value (and other pixels the minimum value)
 					scamp5_in(E,127);
 					scamp5_in(F,-127);
 					scamp5_load_rect(S6,0,0,255,input_value+127);
@@ -120,17 +130,9 @@ int main()
 					scamp5_kernel_end();
 				}
 			}
-			else
-			{
-				scamp5_kernel_begin();
-					get_image(A,E);
-					mov(B,A);
-				scamp5_kernel_end();
-			}
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //PERFORM VERTICAL HALF SCALING
-
+        //Perform global summation using each method
 
 			sum_timer.reset();
 			int16_t sum64_result = scamp5_global_sum_64(A);
@@ -144,10 +146,12 @@ int main()
 			int16_t sum_fast_result = scamp5_global_sum_fast(A);
 			int sum_fast_time = sum_timer.get_usec();
 
+			//Calculate normalised results
 			int sum64_result_normalised = (100*sum64_result)/(sum64_max - sum64_min);
 			int sum16_result_normalised = (100*sum16_result)/(sum16_max - sum16_min);
 			int sum_fast_result_normalised = (100*sum_fast_result)/(sum_fast_max - sum_fast_min);
 
+			//Record these results for computation of the moving average and variance
 			sum64_record[record_cntr] = sum64_result_normalised;
 			sum16_record[record_cntr] = sum16_result_normalised;
 			sum_fast_record[record_cntr] = sum_fast_result_normalised;
@@ -170,13 +174,12 @@ int main()
 			vs_post_int32(plot_data,1,3);
 
 
-		   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-			//OUTPUT IMAGES
+	   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//OUTPUT IMAGES
 
-				output_timer.reset();
-
-				scamp5_output_image(A,display_00);
-				int output_time_microseconds = output_timer.get_usec();//get the time taken for image output
+			output_timer.reset();
+			scamp5_output_image(A,display_00);
+			int output_time_microseconds = output_timer.get_usec();//get the time taken for image output
 
 	    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//OUTPUT TEXT INFO
