@@ -149,7 +149,7 @@ int main()
 
 			output_timer.reset();
 			{
-				scamp5_output_image(A,display_00);
+				output_4bit_image_via_DNEWS(A,display_00);
 			}
 			int image_output_time_microseconds = output_timer.get_usec();//get the time taken for image output
 
