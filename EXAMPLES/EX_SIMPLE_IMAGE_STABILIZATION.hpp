@@ -16,8 +16,6 @@ const dreg_t DREG_current_edge_image = S1;
 const dreg_t DREG_vertical_edges = S2;
 const dreg_t DREG_horizontal_edges = S3;
 
-void threshold_F_into_S6_for_frame_blending(areg_t reg,vs_handle display, int frame_blend_window = 16);
-
 int main()
 {
     vs_init();
@@ -40,21 +38,22 @@ int main()
 	//Varibles used to keep track of alignment "velocity", allows more robust alignment under motion by estimating the new alignment each frame using this "velocity"
 	int alignment_vel_x = 0; int alignment_vel_y = 0;
 
+	//Toggle if we should make use of the velocity for producing an initial estimated alignment each frame
 	int use_velocity = 1;
 	vs_gui_add_switch("use_velocity",1,&use_velocity);
 
-	bool set_anchor_image = false;
-	auto gui_btn_set_anchor_image = vs_gui_add_button("set_anchor_image");
-	vs_on_gui_update(gui_btn_set_anchor_image,[&](int32_t new_value)
+	bool set_key_frame = false;
+	auto gui_btn_set_key_frame = vs_gui_add_button("set_key_frame");
+	vs_on_gui_update(gui_btn_set_key_frame,[&](int32_t new_value)
 	{
-		set_anchor_image = true;
+		set_key_frame = true;
    });
 
     int edge_threshold = 12;
     vs_gui_add_slider("edge_threshold x",0,127,edge_threshold,&edge_threshold);
 
     int alignment_strength = 0;
-    int minimum_alignment_strength = 2000;
+    int minimum_alignment_strength = 1500;//When the alignment strength falls below this value, a new key-frame is taken the the alignment reset
     vs_gui_add_slider("minimum_alignment_strength",0,4000,minimum_alignment_strength,&minimum_alignment_strength);
 
 	int show_current_edge_image = 1;
@@ -68,12 +67,10 @@ int main()
        	vs_disable_frame_trigger();
         vs_frame_loop_control();
 
-        if(alignment_strength < minimum_alignment_strength)
-        {
-        	set_anchor_image = true;
-        	vs_post_text("insufficient edges");
-        }
-        alignment_strength = 0;
+        //Refresh key-frame edge image to prevent it decaying
+		scamp5_kernel_begin();
+			REFRESH(DREG_keyframe_edge_image);
+		scamp5_kernel_end();
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //CAPTURE FRAME
@@ -87,7 +84,7 @@ int main()
 		//COMPUTE HORIZONTAL &  VERTICAL EDGE IMAGES
 
 			scamp5_kernel_begin();
-				//COPY IMAGE TO F AND SHIFT ONE "PIXEL" RIGHT
+				//COPY IMAGE TO F AND SHIFT RIGHT
 				bus(NEWS,AREG_image);
 				bus(F,XW);
 				bus(NEWS,F);
@@ -97,7 +94,7 @@ int main()
 				sub(F,F,AREG_image);
 				abs(AREG_vertical_edges,F);
 
-				//COPY IMAGE TO F AND SHIFT ONE "PIXEL" UP
+				//COPY IMAGE TO F AND SHIFT UP
 				bus(NEWS,AREG_image);
 				bus(F,XS);
 				bus(NEWS,F);
@@ -109,7 +106,7 @@ int main()
 			scamp5_kernel_end();
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		//THRESHOLD AREG EDGE DATA TO BINARY
+		//THRESHOLD AREG HORIZONTAL & VERTICAL EDGE DATA TO BINARY
 
 			scamp5_in(F,edge_threshold);//LOAD THRESHOLD INTO F
 
@@ -133,25 +130,35 @@ int main()
 		//COMBINE THRESHOLDED HORIZONTAL & VERTICAL EDGE RESULTS
 
 			scamp5_kernel_begin();
-				MOV(DREG_current_edge_image,DREG_vertical_edges);//COPY VERTICAL EDGE RESULT
-				OR(DREG_current_edge_image,DREG_horizontal_edges);//OR WITH HORIZONTAL EDGE RESULT
+				MOV(DREG_current_edge_image,DREG_vertical_edges);//copy vertical edges
+				OR(DREG_current_edge_image,DREG_horizontal_edges);//Perform OR with horizontal edges
 			scamp5_kernel_end();
 
-			if(set_anchor_image)
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//UPDATE KEY-FRAME IF BUTTON PRESSED OR ALIGNMENT IS POOR STRENGTH
+
+			//If "strength" of alignment between key-frame and current image falls below threshold, the key-frame should be updated and alignment reset
+	        if(alignment_strength < minimum_alignment_strength)
+	        {
+	        	set_key_frame = true;
+	        	vs_post_text("insufficient edges");
+	        }
+
+			if(set_key_frame)
 			{
-				set_anchor_image = false;
+				set_key_frame = false;
+
+				//Replace key-frame with current edge image
+				scamp5_kernel_begin();
+					MOV(DREG_keyframe_edge_image,DREG_current_edge_image);
+				scamp5_kernel_end();
+
+				//Reset alignment and velocity variable
 				alignment_x = 0;
 				alignment_y = 0;
 				alignment_vel_x = 0;
 				alignment_vel_y = 0;
-
-				scamp5_kernel_begin();
-					MOV(DREG_keyframe_edge_image,DREG_current_edge_image);
-				scamp5_kernel_end();
 			}
-			scamp5_kernel_begin();
-				REFRESH(DREG_keyframe_edge_image);
-			scamp5_kernel_end();
 
 	   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//ESTIMATE THE NEW ALIGNMENT USING "VELOCITY" INFOMATION
@@ -166,6 +173,8 @@ int main()
         //TEST IMAGE ALIGNMENT USING VARIOUS SHIFTS
 		//This code applies various shifts to the captured edge image
 	    //It uses global summation to test the alignment strength between the edge image and key-frame resulting from each shift
+
+	        alignment_strength = 0;//Reset alignment strength
 
 			//Copy the latest edge frame and shift it according to the current alignment
 			//This should roughly align it to the edge key-frame, allowing us to search for a better alignment by only shifting up/down/left/right 1 pixel
@@ -278,17 +287,14 @@ int main()
 
 			output_timer.reset();
 			{
-//				scamp5_output_image(S6,display_01);
-
-
 				scamp5_kernel_begin();
-					 MOV(S6,DREG_current_edge_image);
+					 MOV(S6,DREG_current_edge_image); //Copy the latest edge image
 				scamp5_kernel_end();
-				scamp5_shift(S6,alignment_x+1,alignment_y);
+				scamp5_shift(S6,alignment_x+1,alignment_y); //Shift the copy according to the current estimated alignment
 				scamp5_kernel_begin();
-					 OR(S5,DREG_keyframe_edge_image,S6);
+					 OR(S5,DREG_keyframe_edge_image,S6); //Combine the shifted copy and the key-frame to show the edges of both at once
 				scamp5_kernel_end();
-				scamp5_output_image(S6,display_00);
+				scamp5_output_image(S5,display_00);
 
 				if(show_current_edge_image)
 				{
