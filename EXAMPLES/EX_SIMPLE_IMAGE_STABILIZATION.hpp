@@ -11,8 +11,8 @@ const areg_t AREG_image = A;
 const areg_t AREG_vertical_edges = B;
 const areg_t AREG_horizontal_edges = C;
 
-const dreg_t DREG_keyframe_edges = S0;
-const dreg_t DREG_combined_edges = S1;
+const dreg_t DREG_keyframe_edge_image = S0;
+const dreg_t DREG_current_edge_image = S1;
 const dreg_t DREG_vertical_edges = S2;
 const dreg_t DREG_horizontal_edges = S3;
 
@@ -133,8 +133,8 @@ int main()
 		//COMBINE THRESHOLDED HORIZONTAL & VERTICAL EDGE RESULTS
 
 			scamp5_kernel_begin();
-				MOV(DREG_combined_edges,DREG_vertical_edges);//COPY VERTICAL EDGE RESULT
-				OR(DREG_combined_edges,DREG_horizontal_edges);//OR WITH HORIZONTAL EDGE RESULT
+				MOV(DREG_current_edge_image,DREG_vertical_edges);//COPY VERTICAL EDGE RESULT
+				OR(DREG_current_edge_image,DREG_horizontal_edges);//OR WITH HORIZONTAL EDGE RESULT
 			scamp5_kernel_end();
 
 			if(set_anchor_image)
@@ -146,17 +146,15 @@ int main()
 				alignment_vel_y = 0;
 
 				scamp5_kernel_begin();
-					MOV(DREG_keyframe_edges,DREG_combined_edges);
+					MOV(DREG_keyframe_edge_image,DREG_current_edge_image);
 				scamp5_kernel_end();
 			}
 			scamp5_kernel_begin();
-				REFRESH(DREG_keyframe_edges);
+				REFRESH(DREG_keyframe_edge_image);
 			scamp5_kernel_end();
 
-
-        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        //IMAGE ALIGNMENT
-		//This code updates the "position" at which the captured image aligns with the stored key-frame
+	   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//ESTIMATE THE NEW ALIGNMENT USING "VELOCITY" INFOMATION
 
 			if(use_velocity)
 			{
@@ -164,9 +162,15 @@ int main()
 				alignment_y += alignment_vel_y;
 			}
 
-			//Copy the latest edge frame and shift it to the position determined to align with the edge key-frame
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //TEST IMAGE ALIGNMENT USING VARIOUS SHIFTS
+		//This code applies various shifts to the captured edge image
+	    //It uses global summation to test the alignment strength between the edge image and key-frame resulting from each shift
+
+			//Copy the latest edge frame and shift it according to the current alignment
+			//This should roughly align it to the edge key-frame, allowing us to search for a better alignment by only shifting up/down/left/right 1 pixel
 			scamp5_kernel_begin();
-				MOV(S4,S1);
+				MOV(S4,DREG_current_edge_image);
 			scamp5_kernel_end();
 			scamp5_shift(S4,alignment_x,alignment_y);
 
@@ -189,23 +193,29 @@ int main()
 				int shift_x = test_shift_directions[n][0];
 				int shift_y = test_shift_directions[n][1];
 
-				//Copy the shifted edge frame & apply the test shift to it
+				//Copy the roughly aligned edge image, and then apply the test shift
 				scamp5_kernel_begin();
 					MOV(S6,S4);
 				scamp5_kernel_end();
 				scamp5_shift(S6,shift_x,shift_y);
 
+
 				scamp5_in(F,127);
 				scamp5_kernel_begin();
-					bus(D,F);//D = -127
+					//Create a binary image with 1s where the edge of the key-frame and shifted edge image overlap
+					AND(S5,S6,DREG_keyframe_edge_image);
 
-					AND(S5,S6,S0);//S5 == 1 where the edges of S6 & DREG_keyframe_edges overlap
+					//Convert this binary image to an analog image to feed into global summation
+					bus(C,F);//== -127
 					WHERE(S5);
-						mov(D,F);//D = 127 in PEs where the edges of
+						mov(C,F);//== 127 where edges of key-frame and shifted edge image overlap
 					ALL();
 				scamp5_kernel_end();
 
-				direction_global_sums[n] = scamp5_global_sum_64(D);
+				//The result of this sum will be proportional to overlap of edges between the key-frame & shifted edge images
+				//ie proportional to number of 1s in AND(S5,S6,DREG_keyframe_edge_image)
+				//Higher summation indicates stronger alignment between key-frame & shifted edge image
+				direction_global_sums[n] = scamp5_global_sum_64(C);
 
 				//The highest value sum will have the best alignment, ie. the most overlap between the edge from the current frame and the key-frame
 				if(alignment_strength < direction_global_sums[n])
@@ -213,6 +223,11 @@ int main()
 					alignment_strength = direction_global_sums[n];
 				}
 			}
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//UPDATE alignment
+		//Examine the global summation for each tested shift
+		//Update alignment and velocity from those shifts which improved alignment with the key-frame
 
 			if(direction_global_sums[0] > direction_global_sums[1] &&
 				direction_global_sums[0] > direction_global_sums[2] &&
@@ -267,17 +282,17 @@ int main()
 
 
 				scamp5_kernel_begin();
-					 MOV(S6,S1);
+					 MOV(S6,DREG_current_edge_image);
 				scamp5_kernel_end();
 				scamp5_shift(S6,alignment_x+1,alignment_y);
 				scamp5_kernel_begin();
-					 OR(S5,DREG_keyframe_edges,S6);
+					 OR(S5,DREG_keyframe_edge_image,S6);
 				scamp5_kernel_end();
 				scamp5_output_image(S6,display_00);
 
 				if(show_current_edge_image)
 				{
-					scamp5_output_image(S1,display_01);
+					scamp5_output_image(DREG_current_edge_image,display_01);
 				}
 				vs_post_text("alignment (%d,%d), velocity (%d,%d), strength %d \n",alignment_x,alignment_y,alignment_vel_x,alignment_vel_y,alignment_strength);
 			}
